@@ -22,6 +22,7 @@ def main() -> None:
     if not PRETRAIN_CKPT.exists():
         raise FileNotFoundError("run `python3 stage1_pretrain.py` before SFT")
 
+    # 加载 Stage 1 的模型和词表，继续微调（不重建 tokenizer）
     model, tokenizer, _ = load_checkpoint(PRETRAIN_CKPT, device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
 
@@ -30,6 +31,7 @@ def main() -> None:
     model.train()
     for step in range(train_steps):
         example = SFT_EXAMPLES[step % len(SFT_EXAMPLES)]
+        # prompt 部分 label=-100，只在 answer 上算 CE loss
         xb, yb = encode_supervised_example(
             tokenizer=tokenizer,
             prompt=example["prompt"],

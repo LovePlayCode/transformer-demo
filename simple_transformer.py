@@ -1,4 +1,7 @@
-"""A tiny one-file entry point for the Transformer language model demo."""
+"""A tiny one-file entry point for the Transformer language model demo.
+
+适合第一次阅读：单文件完成 建词表 → 预训练 → 生成，不涉及 SFT/DPO。
+"""
 
 from __future__ import annotations
 
@@ -17,6 +20,7 @@ def main() -> None:
         "small demos make big ideas easier to understand. "
     ) * 80
 
+    # 词表仅从本脚本语料生成（比 full pipeline 字符集更小）
     tokenizer = CharacterTokenizer(text)
     data = torch.tensor(tokenizer.encode(text), dtype=torch.long)
 

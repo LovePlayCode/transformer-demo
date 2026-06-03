@@ -24,7 +24,10 @@ def dpo_loss(
     ref_rejected_logp: torch.Tensor,
     beta: float,
 ) -> torch.Tensor:
-    """DPO makes chosen responses more likely than rejected responses."""
+    """DPO loss：让 policy 相对 reference 更偏好 chosen、更不偏好 rejected。
+
+    loss = -log σ(β * ((log π(chosen)-log π(rejected)) - (log π_ref(chosen)-log π_ref(rejected))))
+    """
 
     policy_logratio = policy_chosen_logp - policy_rejected_logp
     ref_logratio = ref_chosen_logp - ref_rejected_logp
@@ -32,6 +35,7 @@ def dpo_loss(
 
 
 def preference_accuracy(policy_model, tokenizer, device: str) -> tuple[int, int]:
+    """评估 toy 偏好对：chosen 的平均 log-prob 是否高于 rejected。"""
     wins = 0
     for example in PREFERENCE_EXAMPLES:
         chosen = sequence_logprob(policy_model, tokenizer, example["prompt"], example["chosen"], device, normalize=True)
@@ -48,13 +52,14 @@ def main() -> None:
         raise FileNotFoundError("run `python3 stage2_sft.py` before DPO")
 
     policy_model, tokenizer, _ = load_checkpoint(SFT_CKPT, device)
+    # reference model 冻结为 SFT  checkpoint 的副本，防止偏好优化偏离太远
     reference_model = copy.deepcopy(policy_model).to(device)
     reference_model.eval()
     for param in reference_model.parameters():
         param.requires_grad = False
 
     optimizer = torch.optim.AdamW(policy_model.parameters(), lr=5e-5)
-    beta = 0.1
+    beta = 0.1  # 偏好强度；越大越激进地拉开 chosen/rejected
     train_steps = 140
 
     policy_model.train()

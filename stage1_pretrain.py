@@ -18,19 +18,21 @@ def main() -> None:
     torch.manual_seed(42)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    # 词表覆盖预训练+SFT+DPO 全部字符，避免后续 stage 出现未知字符
     tokenizer = CharacterTokenizer(all_training_text())
-    # 预训练数据
+    # 预训练实际只用 PRETRAIN_TEXT；data 是一维 token id 长序列
     data = torch.tensor(tokenizer.encode(PRETRAIN_TEXT), dtype=torch.long)
 
     config = TransformerConfig(vocab_size=tokenizer.vocab_size, block_size=160)
     model = TinyTransformerLM(config).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
 
-    batch_size = 32
+    batch_size = 32  # 每次并行 32 条 (B,T) 片段，对应 attention 里的 B 维
     train_steps = 350
 
     model.train()
     for step in range(train_steps):
+        # xb/yb shape: (32, block_size)，模型内部会 embed 成 (32, T, n_embd)
         xb, yb = get_lm_batch(data, config.block_size, batch_size, device)
         _, loss = model(xb, yb)
         assert loss is not None
@@ -45,6 +47,7 @@ def main() -> None:
     save_checkpoint(PRETRAIN_CKPT, model, tokenizer, extra={"stage": "pretrain"})
     print(f"\nsaved base model to {PRETRAIN_CKPT}")
 
+    # 从字符 't' 开始自回归生成，观察 base model 的语言建模能力
     start = torch.tensor([[tokenizer.stoi["t"]]], dtype=torch.long, device=device)
     generated = model.generate(start, max_new_tokens=180)[0].tolist()
     print("\nBase model sample:")

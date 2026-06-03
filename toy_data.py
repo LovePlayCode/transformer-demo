@@ -8,6 +8,7 @@ pipeline can run on a laptop and the data format is easy to inspect.
 from __future__ import annotations
 
 
+# 预训练语料：重复 80 遍以增加 token 数量，便于随机采样 batch
 PRETRAIN_TEXT = (
     "transformer models learn context with attention. "
     "attention lets every token look back at earlier tokens. "
@@ -19,6 +20,7 @@ PRETRAIN_TEXT = (
 ) * 80
 
 
+# SFT 数据：prompt + answer 对，格式与 chat_cli 一致（User:/Assistant:）
 SFT_EXAMPLES = [
     {
         "prompt": "User: What is a transformer?\nAssistant:",
@@ -43,6 +45,7 @@ SFT_EXAMPLES = [
 ]
 
 
+# DPO 偏好对：同一 prompt 下，chosen 优于 rejected
 PREFERENCE_EXAMPLES = [
     {
         "prompt": "User: What is pretraining?\nAssistant:",
@@ -68,7 +71,10 @@ PREFERENCE_EXAMPLES = [
 
 
 def all_training_text() -> str:
-    """Return every character that may appear in the toy pipeline."""
+    """拼合全部 stage 可能出现的字符，用于 Stage 1 建词表。
+
+    训练仍只用 PRETRAIN_TEXT，但词表需覆盖 SFT/DPO 字符，否则后续 stage 无法 encode。
+    """
 
     pieces = [PRETRAIN_TEXT]
     for example in SFT_EXAMPLES:

@@ -14,6 +14,7 @@ from transformer_core import CharacterTokenizer, TinyTransformerLM, load_checkpo
 
 
 def pick_checkpoint() -> Path:
+    """优先加载最新 stage 的 checkpoint（DPO > SFT > Pretrain）。"""
     for path in (DPO_CKPT, SFT_CKPT, PRETRAIN_CKPT):
         if path.exists():
             return path
@@ -21,6 +22,7 @@ def pick_checkpoint() -> Path:
 
 
 def unsupported_chars(text: str, tokenizer: CharacterTokenizer) -> list[str]:
+    """找出不在词表 stoi 中的字符（如中文），避免 encode 时 KeyError。"""
     return sorted({ch for ch in text if ch not in tokenizer.stoi})
 
 
@@ -37,22 +39,13 @@ def generate_answer(
     idx = torch.tensor([tokenizer.encode(prompt)], dtype=torch.long, device=device)
 
     model.eval()
-    # 反复循环
     for _ in range(max_new_tokens):
         idx_cond = idx[:, -model.config.block_size :]
-        # # ← "算出 logits"
         logits, _ = model(idx_cond)
-        """  
-            - temperature 大 → logits 被压平 → 概率分布变"扁" → 各个 token 都有机会被选 → 输出更"放飞"
-            - temperature 小 → logits 被拉开 → 概率分布变"尖" → 高分 token 几乎独占 → 输出更"保守"
-            - temperature → 0 → 几乎只选最高分那个 → 几乎确定性
-        """
+        # temperature 大 → 分布更平 → 更随机；小 → 更确定
         logits = logits[:, -1, :] / max(temperature, 1e-6)
-        #  # ← "变成概率列表"（你说的！）
         probs = F.softmax(logits, dim=-1)
-        # ← "从待选中挑一个"（你说的！）
         next_idx = torch.multinomial(probs, num_samples=1)
-        # ← "拼起来"（你说的！）
         idx = torch.cat((idx, next_idx), dim=1)
 
         next_char = tokenizer.decode([int(next_idx.item())])

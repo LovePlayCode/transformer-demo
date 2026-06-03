@@ -1,4 +1,7 @@
-"""Run the full educational LLM pipeline end to end."""
+"""Run the full educational LLM pipeline end to end.
+
+Pretrain → SFT → DPO，每阶段 checkpoint 写入 artifacts/。
+"""
 
 from __future__ import annotations
 
