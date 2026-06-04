@@ -78,12 +78,23 @@ class MultiHeadSelfAttention(nn.Module):
         scores = scores.masked_fill(self.causal_mask[:, :, :seq_len, :seq_len] == 0, float("-inf"))
 
         # Step 5: 每行 softmax 得到 attention 权重，再对 V 加权求和 — (B,H,T,D)
+        # scores 决定“看谁”，softmax 决定“看多少”，weights @ v 得到“看完之后汇总出来的信息”。
         weights = F.softmax(scores, dim=-1)
+        # 对注意力权重做dropout,训练时会随机丢掉一部分注意力连接，防止模型过度依赖某些固定token，
+        # 提高模型的泛化能力。
+        # 在推理时，dropout 被禁用，所以不会影响结果。
         weights = self.attn_dropout(weights)
+        """
+        用注意力权重对 v 做加权求和。也就是说，每个 token 根据自己对其他 token 的关注程度，把其他 token 的内容信息混合进来。
+        """
         out = weights @ v
 
         # Step 6: 合并多头 — (B,H,T,D) → (B,T,C)，再经 proj 混合各 head
         out = out.transpose(1, 2).contiguous().view(batch_size, seq_len, n_embd)
+        # 混合不同head的信息 
+        """
+        前面每个 head 是独立计算 attention 的，合并后只是简单拼接。proj 会让模型学习如何组合这些 head 的输出，比如某些 head 更关注语法关系，某些 head 更关注当前位置附近的词，线性层负责把这些信息重新融合成一个新的 token 表示。
+        """
         out = self.proj(out)
         return self.resid_dropout(out)
 
